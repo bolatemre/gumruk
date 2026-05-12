@@ -51,7 +51,7 @@ async def analiz_et(urun: UrunGiris):
                 {"role": "system", "content": "Sen kıdemli bir gümrük müşaviri ve lojistik uzmanısın. Net ve teknik bilgiler ver."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama-3.1-8b-instant2",
+            model="llama-3.1-8b-instant",
         )
         return {"analiz": completion.choices[0].message.content}
     except Exception as e:
