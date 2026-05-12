@@ -41,6 +41,7 @@ st.markdown("""
     .offer-card { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 15px; margin-bottom: 10px; border-left: 5px solid #3b82f6; }
     .badge-log { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
     .badge-gum { background: #fef9c3; color: #854d0e; padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
+    .badge-waiting { background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
     .status-accepted { border-left: 5px solid #22c55e !important; background: #f0fdf4 !important; }
     .status-rejected { border-left: 5px solid #ef4444 !important; background: #fef2f2 !important; opacity: 0.8; }
     .info-label { color: #64748b; font-size: 12px; font-weight: bold; margin-bottom: 5px; }
@@ -194,7 +195,6 @@ else:
                     st.divider()
                     col_analiz, col_teklifler = st.columns([1.5, 1])
                     with col_analiz:
-                        # HATA DÜZELTME: None check eklendi
                         analiz_metni = t['ai_analysis'] if t['ai_analysis'] else "Analiz henüz hazırlanmadı."
                         st.markdown(f"<div class='premium-card'><b>🤖 AI Gümrük & Mevzuat Analizi:</b><br>{analiz_metni}</div>", unsafe_allow_html=True)
                     
@@ -237,9 +237,10 @@ else:
     else:
         # --- FİRMA PANELİ (LOJİSTİK & GÜMRÜK) ---
         st.header(f"🏢 {st.session_state.user_type.upper()} Paneli")
-        f_tab1, f_tab2, f_tab3 = st.tabs(["🔔 Yeni Talepler", "✅ Kabul Edilenler", "❌ Reddedilenler"])
+        f_tab1, f_tab2, f_tab3, f_tab4 = st.tabs(["🔔 Yeni Talepler", "⏳ Bekleyen Tekliflerim", "✅ Kabul Edilenler", "❌ Reddedilenler"])
         
         with f_tab1:
+            # Sadece teklif verilmemiş aktif işler
             cursor.execute("""SELECT r.*, u.username as musterı FROM requests r JOIN users u ON r.user_id = u.id 
                            WHERE r.id NOT IN (SELECT request_id FROM offers WHERE firm_id = %s) ORDER BY r.id DESC""", (st.session_state.user_id,))
             ilanlar = cursor.fetchall()
@@ -257,7 +258,6 @@ else:
                     
                     with col_detay2:
                         st.markdown("<div class='info-label'>🤖 MEVZUAT ÖN ANALİZİ</div>", unsafe_allow_html=True)
-                        # HATA DÜZELTME: Burada None check yapıldı
                         analiz_metni = i['ai_analysis'] if i['ai_analysis'] else "Analiz bulunamadı."
                         st.write(analiz_metni[:350] + "...")
                     
@@ -266,7 +266,6 @@ else:
                     for pr in urunler:
                         st.write(f"- **{pr.get('isim')}**: {pr.get('adet')} Adet | Birim Fiyat: {pr.get('fiyat')}$ | Birim KG: {pr.get('kilo')} KG")
                     
-                    # FORM YAPISI
                     st.write("---")
                     if st.session_state.user_type == 'gumruk_musaviri':
                         st.markdown("### 📜 Gümrük Müşavirliği Teklif Formu")
@@ -304,6 +303,22 @@ else:
                                 conn.commit(); st.success("Teklif iletildi!"); time.sleep(1); st.rerun()
 
         with f_tab2:
+            st.subheader("⏳ Cevap Bekleyen Tekliflerim")
+            cursor.execute("""SELECT r.product_name, o.*, u.username as musterı FROM offers o 
+                           JOIN requests r ON o.request_id = r.id 
+                           JOIN users u ON r.user_id = u.id
+                           WHERE o.firm_id=%s AND o.status='beklemede' ORDER BY o.id DESC""", (st.session_state.user_id,))
+            bekleyenler = cursor.fetchall()
+            if not bekleyenler: st.info("Şu an beklemede olan bir teklifiniz yok.")
+            for b in bekleyenler:
+                st.markdown(f"""<div class='offer-card'>
+                    <span class='badge-waiting'>⏳ BEKLEMEDE</span><br><br>
+                    <b>İş: {b['product_name'][:50]}...</b><br>
+                    Müşteri: {b['musterı']}<br>
+                    Teklifiniz: <b>{b['offer_amount']}$</b> | Süre: {b['delivery_days']} Gün
+                </div>""", unsafe_allow_html=True)
+
+        with f_tab3:
             st.subheader("✅ Müşteri Tarafından Kabul Edilen İşler")
             cursor.execute("""SELECT r.product_name, o.*, u.username as musterı, u.phone FROM offers o 
                            JOIN requests r ON o.request_id = r.id 
@@ -316,7 +331,7 @@ else:
                     Teklifiniz: {v['offer_amount']}$ | Süre: {v['delivery_days']} Gün
                 </div>""", unsafe_allow_html=True)
 
-        with f_tab3:
+        with f_tab4:
             st.subheader("❌ Reddedilen Teklifler")
             cursor.execute("""SELECT r.product_name, o.* FROM offers o 
                            JOIN requests r ON o.request_id = r.id 
