@@ -194,9 +194,9 @@ else:
                     st.divider()
                     col_analiz, col_teklifler = st.columns([1.5, 1])
                     with col_analiz:
-                        st.markdown(f"<div class='premium-card'><b>🤖 AI Gümrük & Mevzuat Analizi:</b><br>{t['ai_analysis']}</div>", unsafe_allow_html=True)
-                        if st.button("Talebi Güncelle/Düzenle", key=f"edit_{t['id']}"):
-                            st.toast("Düzenleme özelliği yakında aktif edilecek!")
+                        # HATA DÜZELTME: None check eklendi
+                        analiz_metni = t['ai_analysis'] if t['ai_analysis'] else "Analiz henüz hazırlanmadı."
+                        st.markdown(f"<div class='premium-card'><b>🤖 AI Gümrük & Mevzuat Analizi:</b><br>{analiz_metni}</div>", unsafe_allow_html=True)
                     
                     with col_teklifler:
                         st.markdown("#### 🚢 Gelen Teklifler")
@@ -234,49 +234,8 @@ else:
                                     st.error(f"{o['username']} teklifi reddedildi.")
                                     time.sleep(1); st.rerun()
 
-        with m_tab2:
-            st.subheader("📦 Yeni İthalat Kalemlerini Ekleyin")
-            col_n1, col_n2 = st.columns([1, 1], gap="large")
-            with col_n1:
-                with st.container(border=True):
-                    nu_ad = st.text_input("Ürün İsmi", placeholder="Örn: Akıllı Saat", key="nu_ad")
-                    nc1, nc2, nc3 = st.columns(3)
-                    nu_fiyat = nc1.number_input("Birim Fiyat ($)", min_value=0.0, key="nu_fiyat")
-                    nu_adet = nc2.number_input("Adet", min_value=1, step=1, key="nu_adet")
-                    nu_kilo = nc3.number_input("Birim Kilo (KG)", min_value=0.0, format="%.2f", key="nu_kilo")
-                    if st.button("➕ Listeye Ekle", key="nu_add"):
-                        if nu_ad and nu_fiyat > 0:
-                            st.session_state.user_items.append({"isim": nu_ad, "fiyat": nu_fiyat, "adet": int(nu_adet), "kilo": nu_kilo})
-                            st.rerun()
-                    if st.session_state.user_items:
-                        st.write("---")
-                        t_kg = 0
-                        for itm in st.session_state.user_items:
-                            s_kg = itm['kilo'] * itm['adet']; t_kg += s_kg
-                            st.markdown(f"<div class='item-row'><span>📦 <b>{itm['isim']}</b> - {itm['adet']} Adet ({itm['fiyat']}$)</span></div>", unsafe_allow_html=True)
-                        st.markdown(f"<div class='total-kg-box'>🚛 TOPLAM AĞIRLIK: {t_kg:.2f} KG</div>", unsafe_allow_html=True)
-                        if st.button("🗑 Listeyi Temizle", key="nu_clr"):
-                            st.session_state.user_items = []
-                            st.rerun()
-            with col_n2:
-                st.subheader("🚛 Lojistik ve Teslimat")
-                with st.container(border=True):
-                    ny_tip = st.selectbox("Yükleme Tipi", ["Konteyner (FCL)", "Parsiyel (LCL)", "Hava Kargo", "Hızlı Kurye"], key="ny_tip")
-                    nt_sekli = st.selectbox("Teslim Şekli (Incoterms)", ["EXW", "FOB", "CIF", "DDP"], key="nt_sekli")
-                    if st.button("Analizi Başlat ve Yayınla 🚀", key="nu_pub"):
-                        if not st.session_state.user_items: st.error("Ürün eklemediniz!")
-                        else:
-                            with st.spinner("AI Analiz Ediyor..."):
-                                tkg = sum(x['kilo']*x['adet'] for x in st.session_state.user_items)
-                                p_text = f"Ürünler: {json.dumps(st.session_state.user_items)} | Toplam: {tkg}KG | Yük: {ny_tip} | Teslim: {nt_sekli}"
-                                res = requests.post("http://localhost:8000/hesapla", json={"isim": p_text, "fiyat": 0, "adet": 0, "agirlik": tkg})
-                                if res.status_code == 200:
-                                    talebi_kaydet(st.session_state.user_id, st.session_state.user_items, ny_tip, nt_sekli, res.json()["analiz"])
-                                    st.session_state.user_items = []
-                                    st.success("Talebiniz başarıyla yayınlandı!"); time.sleep(1); st.rerun()
-
     else:
-        # --- FİRMA PANELİ ---
+        # --- FİRMA PANELİ (LOJİSTİK & GÜMRÜK) ---
         st.header(f"🏢 {st.session_state.user_type.upper()} Paneli")
         f_tab1, f_tab2, f_tab3 = st.tabs(["🔔 Yeni Talepler", "✅ Kabul Edilenler", "❌ Reddedilenler"])
         
@@ -286,7 +245,6 @@ else:
             ilanlar = cursor.fetchall()
             for i in ilanlar:
                 with st.expander(f"📦 Yeni İthalat Talebi | Müşteri: {i['musterı']}"):
-                    # GÜMRÜKÇÜ İÇİN TALEP DETAYLARINI VERİYORUZ
                     col_detay1, col_detay2 = st.columns(2)
                     with col_detay1:
                         st.markdown("<div class='info-label'>🚛 LOJİSTİK DETAYLARI</div>", unsafe_allow_html=True)
@@ -299,36 +257,52 @@ else:
                     
                     with col_detay2:
                         st.markdown("<div class='info-label'>🤖 MEVZUAT ÖN ANALİZİ</div>", unsafe_allow_html=True)
-                        st.write(i['ai_analysis'][:350] + "...")
+                        # HATA DÜZELTME: Burada None check yapıldı
+                        analiz_metni = i['ai_analysis'] if i['ai_analysis'] else "Analiz bulunamadı."
+                        st.write(analiz_metni[:350] + "...")
                     
                     st.write("---")
                     st.markdown("<div class='info-label'>📦 ÜRÜN LİSTESİ</div>", unsafe_allow_html=True)
                     for pr in urunler:
                         st.write(f"- **{pr.get('isim')}**: {pr.get('adet')} Adet | Birim Fiyat: {pr.get('fiyat')}$ | Birim KG: {pr.get('kilo')} KG")
                     
-                    # PROFESYONEL GÜMRÜK MÜŞAVİRİ TEKLİF FORMU
+                    # FORM YAPISI
                     st.write("---")
-                    st.markdown("### 📜 Gümrük Müşavirliği Teklif Formu")
-                    with st.form(key=f"bid_{i['id']}"):
-                        cf1, cf2 = st.columns(2)
-                        with cf1:
-                            musavirlik_bedeli = st.number_input("Gümrük Müşavirlik Ücreti ($)", min_value=0.0, step=10.0)
-                            yolluk_bedeli = st.number_input("Dosya / Yolluk Masrafı ($)", min_value=0.0, step=5.0)
-                        with cf2:
-                            banka_masrafi = st.number_input("Tahmini Banka / Dekont Masrafı ($)", min_value=0.0, step=5.0)
-                            gun_sure = st.number_input("Tahmini İşlem Süresi (Gün)", min_value=1, step=1)
-                        
-                        toplam_teklif = musavirlik_bedeli + yolluk_bedeli + banka_masrafi
-                        st.markdown(f"**Toplam Hizmet Bedeli: {toplam_teklif:.2f} $**")
-                        
-                        if st.form_submit_button("Profesyonel Teklifi Gönder"):
-                            firm_note_custom = f"Müşavirlik: {musavirlik_bedeli}$, Masraf: {yolluk_bedeli+banka_masrafi}$"
-                            cursor.execute("INSERT INTO offers (request_id, firm_id, offer_amount, delivery_days, firm_note, status) VALUES (%s,%s,%s,%s,%s,'beklemede')", 
-                                         (i['id'], st.session_state.user_id, toplam_teklif, gun_sure, firm_note_custom))
-                            conn.commit()
-                            st.success("Gümrük müşavirliği teklifiniz başarıyla iletildi!")
-                            time.sleep(1); st.rerun()
-        
+                    if st.session_state.user_type == 'gumruk_musaviri':
+                        st.markdown("### 📜 Gümrük Müşavirliği Teklif Formu")
+                        with st.form(key=f"bid_gum_{i['id']}"):
+                            cf1, cf2 = st.columns(2)
+                            with cf1:
+                                musavirlik_bedeli = st.number_input("Gümrük Müşavirlik Ücreti ($)", min_value=0.0, step=10.0)
+                                yolluk_bedeli = st.number_input("Dosya / Yolluk Masrafı ($)", min_value=0.0, step=5.0)
+                            with cf2:
+                                banka_masrafi = st.number_input("Tahmini Banka / Dekont Masrafı ($)", min_value=0.0, step=5.0)
+                                gun_sure = st.number_input("Tahmini İşlem Süresi (Gün)", min_value=1, step=1)
+                            
+                            toplam_teklif = musavirlik_bedeli + yolluk_bedeli + banka_masrafi
+                            if st.form_submit_button("Profesyonel Teklifi Gönder"):
+                                note = f"Müşavirlik: {musavirlik_bedeli}$, Masraf: {yolluk_bedeli+banka_masrafi}$"
+                                cursor.execute("INSERT INTO offers (request_id, firm_id, offer_amount, delivery_days, firm_note, status) VALUES (%s,%s,%s,%s,%s,'beklemede')", 
+                                             (i['id'], st.session_state.user_id, toplam_teklif, gun_sure, note))
+                                conn.commit(); st.success("Teklif iletildi!"); time.sleep(1); st.rerun()
+                    else:
+                        st.markdown("### 🚚 Lojistik Navlun Teklif Formu")
+                        with st.form(key=f"bid_log_{i['id']}"):
+                            cf1, cf2 = st.columns(2)
+                            with cf1:
+                                navlun_bedeli = st.number_input("Navlun Bedeli ($)", min_value=0.0, step=50.0)
+                                sigorta_bedeli = st.number_input("Sigorta Bedeli ($)", min_value=0.0, step=10.0)
+                            with cf2:
+                                ic_nakliye = st.number_input("İç Nakliye Bedeli ($)", min_value=0.0, step=20.0)
+                                varis_sure = st.number_input("Tahmini Varış Süresi (Gün)", min_value=1, step=1)
+                            
+                            toplam_log = navlun_bedeli + sigorta_bedeli + ic_nakliye
+                            if st.form_submit_button("Lojistik Teklifini Gönder"):
+                                note = f"Navlun: {navlun_bedeli}$, Sigorta: {sigorta_bedeli}$, İç Nakliye: {ic_nakliye}$"
+                                cursor.execute("INSERT INTO offers (request_id, firm_id, offer_amount, delivery_days, firm_note, status) VALUES (%s,%s,%s,%s,%s,'beklemede')", 
+                                             (i['id'], st.session_state.user_id, toplam_log, varis_sure, note))
+                                conn.commit(); st.success("Teklif iletildi!"); time.sleep(1); st.rerun()
+
         with f_tab2:
             st.subheader("✅ Müşteri Tarafından Kabul Edilen İşler")
             cursor.execute("""SELECT r.product_name, o.*, u.username as musterı, u.phone FROM offers o 
