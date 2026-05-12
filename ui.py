@@ -38,6 +38,7 @@ st.markdown("""
     .premium-card { background: white; padding: 25px; border-radius: 15px; border-left: 8px solid #1e3a8a; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
     .blur-text { filter: blur(5px); opacity: 0.4; pointer-events: none; }
     .total-kg-box { background: #1e3a8a; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; margin-top: 10px; }
+    .offer-card { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 15px; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -60,7 +61,6 @@ if not st.session_state.user_id:
     
     with tab_ana:
         col1, col2 = st.columns([1, 1], gap="large")
-        
         with col1:
             st.subheader("📦 İthalat Kalemlerini Ekleyin")
             with st.container(border=True):
@@ -69,30 +69,18 @@ if not st.session_state.user_id:
                 u_fiyat = c1.number_input("Birim Fiyat ($)", min_value=0.0)
                 u_adet = c2.number_input("Adet", min_value=1, step=1)
                 u_kilo = c3.number_input("Birim Kilo (KG)", min_value=0.0, format="%.2f")
-                
                 if st.button("➕ Listeye Ekle"):
                     if u_ad and u_fiyat > 0:
-                        st.session_state.user_items.append({
-                            "isim": u_ad, 
-                            "fiyat": u_fiyat, 
-                            "adet": int(u_adet),
-                            "kilo": u_kilo
-                        })
+                        st.session_state.user_items.append({"isim": u_ad, "fiyat": u_fiyat, "adet": int(u_adet), "kilo": u_kilo})
                         st.rerun()
-                
                 if st.session_state.user_items:
                     st.write("---")
                     toplam_kg = 0
                     for idx, itm in enumerate(st.session_state.user_items):
                         satir_kg = itm['kilo'] * itm['adet']
                         toplam_kg += satir_kg
-                        st.markdown(f"""
-                        <div class='item-row'>
-                            <span>📦 <b>{itm['isim']}</b> - {itm['adet']} Adet ({itm['fiyat']}$) - Toplam: {satir_kg:.2f} KG</span>
-                        </div>""", unsafe_allow_html=True)
-                    
+                        st.markdown(f"<div class='item-row'><span>📦 <b>{itm['isim']}</b> - {itm['adet']} Adet ({itm['fiyat']}$) - Toplam: {satir_kg:.2f} KG</span></div>", unsafe_allow_html=True)
                     st.markdown(f"<div class='total-kg-box'>🚛 TOPLAM SEVKİYAT AĞIRLIĞI: {toplam_kg:.2f} KG</div>", unsafe_allow_html=True)
-                    
                     if st.button("🗑 Listeyi Temizle"):
                         st.session_state.user_items = []
                         st.rerun()
@@ -101,7 +89,6 @@ if not st.session_state.user_id:
             with st.container(border=True):
                 y_tip = st.selectbox("Yükleme Tipi", ["Konteyner (FCL)", "Parsiyel (LCL)", "Hava Kargo", "Hızlı Kurye", "Karayolu Tır"])
                 t_sekli = st.selectbox("Teslim Şekli (Incoterms)", ["EXW - Fabrika Teslim", "FOB - Liman Teslim", "CIF - Sigorta ve Navlun Dahil", "DDP - Gümrük Ödenmiş Kapı Teslim"])
-                
                 if st.button("Analiz Et ve İlana Çık 🚀"):
                     if not st.session_state.user_items:
                         st.error("Lütfen önce en az bir ürün ekleyin.")
@@ -143,8 +130,7 @@ if not st.session_state.user_id:
                             if st.session_state.user_items and st.session_state.temp_res:
                                 talebi_kaydet(u['id'], st.session_state.user_items, y_tip, t_sekli, st.session_state.temp_res)
                             st.rerun()
-                        else:
-                            st.error("Hatalı e-posta veya şifre.")
+                        else: st.error("Hatalı e-posta veya şifre.")
 
         with col_r:
             st.markdown("### 📝 Yeni Kayıt Ol")
@@ -154,28 +140,82 @@ if not st.session_state.user_id:
                 r_mail = st.text_input("E-posta Adresi", key="reg_email")
                 r_tel = st.text_input("Telefon Numarası")
                 r_pass = st.text_input("Şifre Belirleyin", type="password", key="reg_pass")
-                
                 if st.button("Kaydı Tamamla ✨"):
                     if r_name and r_mail and r_pass:
                         conn = get_db_connection()
                         if conn:
                             try:
                                 cursor = conn.cursor()
-                                cursor.execute("INSERT INTO users (username, email, password, user_type, phone) VALUES (%s,%s,%s,%s,%s)", 
-                                             (r_name, r_mail, r_pass, r_type, r_tel))
+                                cursor.execute("INSERT INTO users (username, email, password, user_type, phone) VALUES (%s,%s,%s,%s,%s)", (r_name, r_mail, r_pass, r_type, r_tel))
                                 conn.commit()
                                 st.success("Kayıt Başarılı! Şimdi giriş yapabilirsiniz.")
-                            except Exception as e:
-                                st.error(f"Hata: Bu e-posta zaten kayıtlı olabilir.")
-                            finally:
-                                conn.close()
-                    else:
-                        st.warning("Lütfen zorunlu alanları doldurun.")
+                            except: st.error("Hata: Bu e-posta zaten kayıtlı olabilir.")
+                            finally: conn.close()
+                    else: st.warning("Lütfen zorunlu alanları doldurun.")
 
+# --- 2. DURUM: GİRİŞ YAPILMIŞ PANELLER ---
 else:
     st.sidebar.success(f"Hoş geldin, {st.session_state.user_name}")
     if st.sidebar.button("🚪 Güvenli Çıkış"):
         st.session_state.clear()
         st.rerun()
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if st.session_state.user_type == 'musteri':
+        st.header("🏢 İthalatçı Kontrol Merkezi")
+        m_tab1, m_tab2 = st.tabs(["📋 Taleplerim & Gelen Teklifler", "➕ Yeni Talep"])
+        
+        with m_tab1:
+            cursor.execute("SELECT * FROM requests WHERE user_id=%s ORDER BY id DESC", (st.session_state.user_id,))
+            talepler = cursor.fetchall()
+            for t in talepler:
+                with st.expander(f"📦 {t['product_name'][:50]}... - {t['created_at'].strftime('%d/%m/%Y')}"):
+                    c1, c2 = st.columns([2, 1])
+                    with c1:
+                        st.markdown(f"<div class='premium-card'><b>🤖 AI Analizi:</b><br>{t['ai_analysis']}</div>", unsafe_allow_html=True)
+                    with c2:
+                        st.markdown("#### 🚢 Teklifler")
+                        cursor.execute("SELECT o.*, u.username, u.user_type, u.phone FROM offers o JOIN users u ON o.firm_id = u.id WHERE o.request_id=%s", (t['id'],))
+                        offers = cursor.fetchall()
+                        if not offers: st.info("Teklif bekleniyor...")
+                        for o in offers:
+                            icon = "🚚" if o['user_type'] == 'lojistik_firmasi' else "📜"
+                            st.markdown(f"<div class='offer-card'><b>{icon} {o['username']}</b><br>Fiyat: <b>{o['offer_amount']}$</b><br>Süre: {o['delivery_days']} Gün<br>📞 {o['phone']}</div>", unsafe_allow_html=True)
+
+        with m_tab2:
+            st.info("Yeni talep oluşturmak için ana sayfadaki analiz aracını kullanabilirsiniz. Mevcut analiziniz giriş yaptığınızda otomatik olarak kaydedilmiştir.")
+
+    else:
+        # --- FİRMA PANELİ (LOJİSTİK & GÜMRÜK) ---
+        st.header(f"🏢 {st.session_state.user_type.upper()} Paneli")
+        f_tab1, f_tab2 = st.tabs(["🔔 Yeni Talepler", "✅ Verdiklerim"])
+        
+        with f_tab1:
+            # Firmaya uygun ve teklif verilmemiş talepler
+            cursor.execute("""SELECT r.*, u.username as musterı FROM requests r JOIN users u ON r.user_id = u.id 
+                           WHERE r.id NOT IN (SELECT request_id FROM offers WHERE firm_id = %s) ORDER BY r.id DESC""", (st.session_state.user_id,))
+            ilanlar = cursor.fetchall()
+            for i in ilanlar:
+                with st.expander(f"📦 {i['product_name'][:60]}... | Müşteri: {i['musterı']}"):
+                    st.write(f"**Yükleme:** {i['load_type']} | **Teslim:** {i['extra_info']}")
+                    with st.form(key=f"bid_{i['id']}"):
+                        amt = st.number_input("Teklif Tutarı ($)", min_value=0.0)
+                        days = st.number_input("Süre (Gün)", min_value=1, step=1)
+                        note = st.text_area("Not")
+                        if st.form_submit_button("Teklifi Gönder"):
+                            cursor.execute("INSERT INTO offers (request_id, firm_id, offer_amount, delivery_days, firm_note) VALUES (%s,%s,%s,%s,%s)", 
+                                         (i['id'], st.session_state.user_id, amt, days, note))
+                            conn.commit()
+                            st.success("Teklif iletildi!")
+                            time.sleep(1)
+                            st.rerun()
+
+        with f_tab2:
+            cursor.execute("""SELECT r.product_name, o.* FROM offers o JOIN requests r ON o.request_id = r.id 
+                           WHERE o.firm_id=%s ORDER BY o.id DESC""", (st.session_state.user_id,))
+            for v in cursor.fetchall():
+                st.markdown(f"<div class='offer-card'><b>İş: {v['product_name'][:50]}...</b><br>Teklifiniz: {v['offer_amount']}$ | Süre: {v['delivery_days']} Gün</div>", unsafe_allow_html=True)
     
-    # Burada kullanıcı tipine göre (Müşteri/Firma) paneller devam eder.
+    conn.close()
