@@ -15,26 +15,32 @@ class AnalizIstegi(BaseModel):
 
 @app.post("/hesapla")
 async def analiz_et(istek: AnalizIstegi):
-    # 2026 GÜNCEL MEVZUAT TALİMATI
+    # En güncel Llama 3.3 Modeli
     prompt = f"""
-    TÜRKİYE 2026 GÜMRÜK VE DIŞ TİCARET REJİMİNE GÖRE HESAPLA:
-    Ürün: {istek.isim} | Alış Fiyatı: {istek.fiyat} USD | Adet: {istek.adet} | Ağırlık: {istek.agirlik} KG
+    TÜRKİYE 2026 GÜMRÜK MEVZUATINA GÖRE ANALİZ:
+    Ürün: {istek.isim} | Fiyat: {istek.fiyat} USD | Adet: {istek.adet} | Ağırlık: {istek.agirlik} KG
     
-    ZORUNLU HESAPLAMA PARAMETRELERİ:
-    1. Gümrük Vergisi: Çin menşei için %60 İGV (İlave Gümrük Vergisi) ekle.
-    2. KDV: %20 olarak hesapla.
-    3. Ek Masraflar: Damga vergisi, Gümrüğe sunma ve Ardiye masrafları için toplam maktu 120 USD ekle.
-    4. Navlun (USD): KG başı 6 USD üzerinden tahmini kargo bedeli çıkar.
-    5. ÇIKTI: Sadece USD ($) cinsinden, net bir tablo ve kısa esnaf yorumu olsun.
+    HESAPLAMA DETAYLARI:
+    - Çin Menşei ürünler için %60 İlave Gümrük Vergisi (İGV) uygula.
+    - %20 KDV ekle.
+    - 120 USD Sabit Gümrük Masrafı (Damga, Sunma, Ardiye) ekle.
+    - Navlun: KG başı 6-8 USD arası tahmini navlun ekle.
+    
+    ÇIKTI FORMATI:
+    - Kategori ve GTİP Tahmini
+    - Vergi Tablosu (USD)
+    - Navlun Tahmini (USD)
+    - Toplam Kapı Teslim Maliyeti (USD)
+    - Kısa Esnaf Yorumu (Karlılık Analizi)
     """
 
     try:
         completion = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "Sen çok tecrübeli bir gümrük müşavirisin. 2026 yılı güncel vergi oranlarını ve dolar bazlı maliyetleri kullanırsın."},
+                {"role": "system", "content": "Sen kıdemli bir gümrük müşavirisin. Cevapların net, profesyonel ve sadece USD cinsinden olsun."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
         )
         return {"analiz": completion.choices[0].message.content}
     except Exception as e:
