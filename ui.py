@@ -41,6 +41,8 @@ st.markdown("""
     .offer-card { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 15px; margin-bottom: 10px; border-left: 5px solid #3b82f6; }
     .badge-log { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
     .badge-gum { background: #fef9c3; color: #854d0e; padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; }
+    .status-accepted { border-left: 5px solid #22c55e !important; background: #f0fdf4 !important; }
+    .status-rejected { border-left: 5px solid #ef4444 !important; background: #fef2f2 !important; opacity: 0.8; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -172,7 +174,6 @@ else:
             cursor.execute("SELECT * FROM requests WHERE user_id=%s ORDER BY id DESC", (st.session_state.user_id,))
             talepler = cursor.fetchall()
             for t in talepler:
-                # Ürün listesini çöz
                 try: urun_listesi = json.loads(t['product_name'])
                 except: urun_listesi = [{"isim": t['product_name'], "fiyat": 0, "adet": 0, "kilo": 0}]
                 
@@ -205,21 +206,36 @@ else:
                             is_log = o['user_type'] == 'lojistik_firmasi'
                             label = "🚚 Lojistik Teklifi" if is_log else "📜 Gümrük Müşavirliği Teklifi"
                             badge_class = "badge-log" if is_log else "badge-gum"
+                            
+                            status_class = ""
+                            if o['status'] == 'kabul_edildi': status_class = "status-accepted"
+                            elif o['status'] == 'reddedildi': status_class = "status-rejected"
+
                             st.markdown(f"""
-                                <div class='offer-card'>
+                                <div class='offer-card {status_class}'>
                                     <span class='{badge_class}'>{label}</span><br><br>
                                     <b>{o['username']}</b><br>
                                     Fiyat: <b>{o['offer_amount']}$</b> | Süre: {o['delivery_days']} Gün<br>
-                                    📞 {o['phone']}
+                                    📞 {o['phone']}<br>
+                                    <b>Durum: {o['status'].upper()}</b>
                                 </div>""", unsafe_allow_html=True)
-                            ca1, ca2 = st.columns(2)
-                            ca1.button("✅ Kabul Et", key=f"acc_{o['id']}")
-                            ca2.button("❌ Reddet", key=f"rej_{o['id']}")
+                            
+                            if o['status'] == 'beklemede':
+                                ca1, ca2 = st.columns(2)
+                                if ca1.button("✅ Kabul Et", key=f"acc_{o['id']}"):
+                                    cursor.execute("UPDATE offers SET status='kabul_edildi' WHERE id=%s", (o['id'],))
+                                    conn.commit()
+                                    st.success(f"{o['username']} teklifi kabul edildi!")
+                                    time.sleep(1); st.rerun()
+                                if ca2.button("❌ Reddet", key=f"rej_{o['id']}"):
+                                    cursor.execute("UPDATE offers SET status='reddedildi' WHERE id=%s", (o['id'],))
+                                    conn.commit()
+                                    st.error(f"{o['username']} teklifi reddedildi.")
+                                    time.sleep(1); st.rerun()
 
         with m_tab2:
-            # Ana sayfadaki ürün listesi formunu aynen buraya taşıdık
             st.subheader("📦 Yeni İthalat Kalemlerini Ekleyin")
-            col_n1, col_n2 = st.columns([1, 1], gap="large")
+            col_n1, col_n2 = st.columns([1, 1], gap="large") # Kaymayı önlemek için sabit sütunlar
             with col_n1:
                 with st.container(border=True):
                     nu_ad = st.text_input("Ürün İsmi", placeholder="Örn: Akıllı Saat", key="nu_ad")
@@ -261,7 +277,8 @@ else:
     else:
         # --- FİRMA PANELİ ---
         st.header(f"🏢 {st.session_state.user_type.upper()} Paneli")
-        f_tab1, f_tab2 = st.tabs(["🔔 Yeni Talepler", "✅ Verdiklerim"])
+        f_tab1, f_tab2, f_tab3 = st.tabs(["🔔 Yeni Talepler", "✅ Kabul Edilenler", "❌ Reddedilenler"])
+        
         with f_tab1:
             cursor.execute("""SELECT r.*, u.username as musterı FROM requests r JOIN users u ON r.user_id = u.id 
                            WHERE r.id NOT IN (SELECT request_id FROM offers WHERE firm_id = %s) ORDER BY r.id DESC""", (st.session_state.user_id,))
@@ -276,11 +293,31 @@ else:
                         amt = st.number_input("Teklif Tutarı ($)", min_value=0.0)
                         days = st.number_input("Süre (Gün)", min_value=1, step=1)
                         if st.form_submit_button("Teklifi Gönder"):
-                            cursor.execute("INSERT INTO offers (request_id, firm_id, offer_amount, delivery_days, firm_note) VALUES (%s,%s,%s,%s,%s)", (i['id'], st.session_state.user_id, amt, days, ""))
+                            cursor.execute("INSERT INTO offers (request_id, firm_id, offer_amount, delivery_days, firm_note, status) VALUES (%s,%s,%s,%s,%s,'beklemede')", (i['id'], st.session_state.user_id, amt, days, ""))
                             conn.commit(); st.success("Teklif iletildi!"); time.sleep(1); st.rerun()
+        
         with f_tab2:
-            cursor.execute("""SELECT r.product_name, o.* FROM offers o JOIN requests r ON o.request_id = r.id 
-                           WHERE o.firm_id=%s ORDER BY o.id DESC""", (st.session_state.user_id,))
+            st.subheader("✅ Müşteri Tarafından Kabul Edilen İşler")
+            cursor.execute("""SELECT r.product_name, o.*, u.username as musterı, u.phone FROM offers o 
+                           JOIN requests r ON o.request_id = r.id 
+                           JOIN users u ON r.user_id = u.id
+                           WHERE o.firm_id=%s AND o.status='kabul_edildi' ORDER BY o.id DESC""", (st.session_state.user_id,))
             for v in cursor.fetchall():
-                st.markdown(f"<div class='offer-card'><b>İş: {v['product_name'][:50]}...</b><br>Teklifiniz: {v['offer_amount']}$ | Süre: {v['delivery_days']} Gün</div>", unsafe_allow_html=True)
+                st.markdown(f"""<div class='offer-card status-accepted'>
+                    <b>İş: {v['product_name'][:50]}...</b><br>
+                    Müşteri: {v['musterı']} | 📞 {v['phone']}<br>
+                    Teklifiniz: {v['offer_amount']}$ | Süre: {v['delivery_days']} Gün
+                </div>""", unsafe_allow_html=True)
+
+        with f_tab3:
+            st.subheader("❌ Reddedilen Teklifler")
+            cursor.execute("""SELECT r.product_name, o.* FROM offers o 
+                           JOIN requests r ON o.request_id = r.id 
+                           WHERE o.firm_id=%s AND o.status='reddedildi' ORDER BY o.id DESC""", (st.session_state.user_id,))
+            for v in cursor.fetchall():
+                st.markdown(f"""<div class='offer-card status-rejected'>
+                    <b>İş: {v['product_name'][:50]}...</b><br>
+                    Teklifiniz: {v['offer_amount']}$ | Durum: REDDEDİLDİ
+                </div>""", unsafe_allow_html=True)
+                
     conn.close()
