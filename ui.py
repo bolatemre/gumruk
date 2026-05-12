@@ -3,7 +3,7 @@ import mysql.connector
 import requests
 import time
 
-# --- VERİTABANI ---
+# --- VERİTABANI BAĞLANTISI ---
 DB_CONFIG = {
     "host": "72.60.86.17", 
     "user": "u115468925_lojistik",
@@ -21,135 +21,117 @@ def get_db_connection():
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Lojistik & Gümrük Borsası", page_icon="🚢", layout="wide")
 
-# --- SESSION STATE (BAŞLANGIÇ) ---
+# --- SESSION STATE ---
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
     st.session_state.user_type = None
     st.session_state.user_name = None
-    st.session_state.temp_res = None
-    st.session_state.last_calc = None
 
-# --- GELİŞMİŞ CSS (BEYAZ KUTU VE ÇİZGİ DÜZELTMELERİ) ---
+# --- CSS (MÜŞTERİ PANELİ İÇİN ÖZEL) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #f4f7f9; }
-    
-    /* Form ve Kutuların Sabitlenmesi */
-    .custom-box {
-        background-color: white;
-        padding: 30px;
-        border-radius: 15px;
-        border: 2px solid #e2e8f0;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-    }
-    
-    /* Flu Efekti */
-    .blur-text { filter: blur(5px); opacity: 0.4; pointer-events: none; }
-    
-    /* Kurumsal Başlıklar */
-    h1, h2, h3 { color: #1e3a8a !important; font-weight: 800; }
-    
-    /* Sekme (Tab) Yazılarını Belirginleştir */
-    .stTabs [data-baseweb="tab"] { font-size: 18px; font-weight: 700; color: #475569; }
-    .stTabs [aria-selected="true"] { color: #1e3a8a !important; border-bottom-color: #1e3a8a !important; }
+    .stApp { background-color: #f8fafc; }
+    .report-card { background: white; padding: 20px; border-radius: 12px; border-left: 8px solid #1e3a8a; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .offer-card { background: #f0f9ff; padding: 15px; border-radius: 10px; border: 1px solid #bae6fd; margin-bottom: 10px; }
+    .price-tag { font-size: 20px; color: #1e3a8a; font-weight: 800; }
+    .info-box { background: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- HEADER ---
-st.title("🚢 Lojistik & Gümrük Borsası")
-st.divider()
+# --- FONKSİYONLAR ---
+def talebi_kaydet(uid, isim, fiyat, adet, agirlik, analiz, yuk_tipi):
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            query = "INSERT INTO requests (user_id, product_name, price, quantity, weight, ai_analysis, extra_info) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            cursor.execute(query, (uid, isim, fiyat, adet, agirlik, analiz, yuk_tipi))
+            conn.commit()
+        finally:
+            conn.close()
 
-# --- ANA MANTIK ---
-
+# --- ANA DÖNGÜ ---
 if not st.session_state.user_id:
-    # GİRİŞ YAPILMAMIŞSA
-    tab_ana, tab_auth = st.tabs(["📊 Hızlı Analiz", "🔐 Giriş / Kayıt"])
-    
-    with tab_ana:
-        col1, col2 = st.columns([1, 1], gap="large")
-        with col1:
-            st.markdown("### İthalat Verilerini Girin")
-            # Kutuyu HTML ile manuel çiziyoruz ki Streamlit bozmasın
-            with st.container(border=True):
-                u = st.text_input("Ürün İsmi", placeholder="Örn: Akıllı Saat", key="vit_u")
-                yuk = st.selectbox("Yükleme Tipi", ["Parsiyel", "Konteyner", "Hava", "Kurye"], key="vit_yuk")
-                c1, c2, c3 = st.columns(3)
-                fv = c1.number_input("Birim $", key="vit_f")
-                av = c2.number_input("Adet", step=1, key="vit_a")
-                kv = c3.number_input("Toplam KG", key="vit_k")
-                
-                if st.button("Maliyeti Analiz Et 🚀", key="vit_btn"):
-                    if u and fv > 0:
-                        with st.spinner("AI Hesaplıyor..."):
-                            res = requests.post("http://localhost:8000/hesapla", json={"isim": f"{u} ({yuk})", "fiyat": fv, "adet": av, "agirlik": kv})
-                            if res.status_code == 200:
-                                st.session_state.temp_res = res.json()["analiz"]
-                                st.session_state.last_calc = {"isim": u, "fiyat": fv, "adet": av, "agirlik": kv, "yukleme_tipi": yuk}
-                                st.rerun() # Sayfayı yenileyerek sonucu göster
-        
-        with col2:
-            st.markdown("### 📊 Analiz Ön İzleme")
-            if st.session_state.temp_res:
-                with st.container(border=True):
-                    st.success("✅ Tahmini Rapor Hazır!")
-                    st.markdown(f"<div>{st.session_state.temp_res[:150]}</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='blur-text'>{st.session_state.temp_res[150:600]}</div>", unsafe_allow_html=True)
-                    st.info("🔒 Tam rapor ve navlun teklifleri için Giriş Yapın.")
-            else:
-                st.info("Formu doldurduğunuzda AI raporu burada belirecek.")
+    # --- GİRİŞ / KAYIT VE VİTRİN EKRANI (BURASI ZATEN ÇALIŞIYORDU) ---
+    st.title("🚢 Lojistik & Gümrük Borsası")
+    # ... (Önceki mesajdaki Giriş/Kayıt/Vitrin kodları burada yer almalı)
+    st.info("Lütfen giriş yapın veya analiz yapın.")
 
-    with tab_auth:
-        # GİRİŞ / KAYIT EKRANI
-        col_login, col_reg = st.columns(2, gap="large")
-        
-        with col_login:
-            st.markdown("### Giriş Yap")
-            with st.container(border=True):
-                le = st.text_input("E-posta", key="log_e")
-                lp = st.text_input("Şifre", type="password", key="log_p")
-                if st.button("Sisteme Giriş Yap", key="log_btn"):
-                    conn = get_db_connection()
-                    if conn:
-                        cursor = conn.cursor(dictionary=True)
-                        cursor.execute("SELECT * FROM users WHERE email=%s AND password=%s", (le, lp))
-                        user = cursor.fetchone()
-                        if user:
-                            st.session_state.user_id = user['id']
-                            st.session_state.user_type = user['user_type']
-                            st.session_state.user_name = user['username']
-                            st.rerun()
-                        else:
-                            st.error("Hatalı e-posta veya şifre.")
-                        conn.close()
-
-        with col_reg:
-            st.markdown("### Üye Ol")
-            with st.container(border=True):
-                ri = st.text_input("Ad Soyad / Firma", key="reg_i")
-                re = st.text_input("E-posta", key="reg_e")
-                rp = st.text_input("Şifre", type="password", key="reg_p")
-                rt = st.selectbox("Rolünüz", ["musteri", "lojistik_firmasi", "gumruk_musaviri"], key="reg_t")
-                if st.button("Kayıt Ol", key="reg_btn"):
-                    conn = get_db_connection()
-                    if conn:
-                        cursor = conn.cursor()
-                        cursor.execute("INSERT INTO users (username, email, password, user_type) VALUES (%s,%s,%s,%s)", (ri, re, rp, rt))
-                        conn.commit()
-                        st.success("Kayıt Başarılı! Şimdi giriş yapabilirsiniz.")
-                        conn.close()
-
-# --- GİRİŞ YAPILMIŞSA ---
 else:
-    # Sidebar ve Paneller (Müşteri/Firma)
+    # --- GİRİŞ YAPILMIŞ: MÜŞTERİ VEYA FİRMA PANELİ ---
     st.sidebar.success(f"Hoş geldin, {st.session_state.user_name}")
-    if st.sidebar.button("Güvenli Çıkış"):
+    if st.sidebar.button("🚪 Güvenli Çıkış"):
         st.session_state.clear()
         st.rerun()
-    
+
     if st.session_state.user_type == 'musteri':
-        st.header("🏢 İthalatçı Paneli")
-        # Müşteri paneli kodlarını buraya ekleyebilirsin
+        st.header("🏢 İthalatçı İşlem Paneli")
+        
+        tab_list, tab_new = st.tabs(["📋 Taleplerim & Teklifler", "➕ Yeni Talep Oluştur"])
+        
+        with tab_list:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT * FROM requests WHERE user_id = %s ORDER BY id DESC", (st.session_state.user_id,))
+                talepler = cursor.fetchall()
+                
+                if not talepler:
+                    st.warning("Henüz kayıtlı bir ithalat talebiniz bulunmuyor.")
+                
+                for t in talepler:
+                    with st.expander(f"📦 {t['product_name']} - {t['created_at'].strftime('%d/%m/%Y')}"):
+                        col_analiz, col_teklif = st.columns([1.5, 1])
+                        
+                        with col_analiz:
+                            st.markdown("#### 🤖 AI Analiz Raporu")
+                            st.markdown(f"<div class='report-card'>{t['ai_analysis']}</div>", unsafe_allow_html=True)
+                        
+                        with col_teklif:
+                            st.markdown("#### 🚢 Gelen Teklifler")
+                            cursor.execute("""SELECT o.*, u.username, u.phone FROM offers o 
+                                           JOIN users u ON o.firm_id = u.id 
+                                           WHERE o.request_id = %s""", (t['id'],))
+                            teklifler = cursor.fetchall()
+                            if not teklifler:
+                                st.info("Şu an teklif bekleniyor...")
+                            for o in teklifler:
+                                st.markdown(f"""
+                                <div class='offer-card'>
+                                    <div class='price-tag'>{o['offer_amount']}$</div>
+                                    <b>Firma:</b> {o['username']}<br>
+                                    ⏱ <b>Süre:</b> {o['delivery_days']} Gün<br>
+                                    📞 <b>İletişim:</b> {o['phone']}
+                                    <p style='font-size:13px; color:#64748b; margin-top:5px;'>{o['firm_note']}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                if st.button("Teklifi Sil", key=f"del_{o['id']}"):
+                                    cursor.execute("DELETE FROM offers WHERE id=%s", (o['id'],))
+                                    conn.commit()
+                                    st.rerun()
+                conn.close()
+
+        with tab_new:
+            st.subheader("Yeni Bir İthalat Maliyeti Hesapla")
+            with st.form("yeni_talep_form", clear_on_submit=True):
+                u_n = st.text_input("Ürün İsmi")
+                y_n = st.selectbox("Yükleme Tipi", ["Parsiyel", "Konteyner", "Hava", "Kurye"])
+                c1, c2, c3 = st.columns(3)
+                f_n = c1.number_input("Birim $")
+                a_n = c2.number_input("Adet", step=1)
+                k_n = c3.number_input("Toplam KG")
+                
+                if st.form_submit_button("Analiz Et ve İlana Çık 🚀"):
+                    with st.spinner("AI Rapor Hazırlıyor..."):
+                        res = requests.post("http://localhost:8000/hesapla", json={"isim": f"{u_n} ({y_n})", "fiyat": f_n, "adet": a_n, "agirlik": k_n})
+                        if res.status_code == 200:
+                            talebi_kaydet(st.session_state.user_id, u_n, f_n, a_n, k_n, res.json()["analiz"], y_n)
+                            st.balloons()
+                            st.success("Talebiniz başarıyla oluşturuldu! 'Taleplerim' sekmesinden takip edebilirsiniz.")
+                            time.sleep(1)
+                            st.rerun()
+
     else:
-        st.header("🚛 Firma Paneli")
-        # Firma paneli kodlarını buraya ekleyebilirsin
+        # --- FİRMA PANELİ ---
+        st.header("🚛 Firma Teklif Borsası")
+        # Firma paneli kodları (Teklif verme ve düzenleme) burada yer alacak
