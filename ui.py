@@ -1,104 +1,91 @@
 import streamlit as st
 import requests
 
-# Sayfa ayarları
-st.set_page_config(page_title="GümrükAsistanı AI", page_icon="📈", layout="wide")
+# Sayfa Yapısı
+st.set_page_config(page_title="İthalat Borsası | Gümrük & Lojistik", layout="wide")
 
-# Tasarım CSS (Hata burada düzeltildi: unsafe_allow_html=True yapıldı)
+# Kurumsal Tema
 st.markdown("""
     <style>
-    /* Arka plan ve genel font */
-    .main { background-color: #f0f2f6; }
-    
-    /* Buton tasarımı */
-    .stButton>button { 
-        width: 100%; 
-        border-radius: 10px; 
-        background-color: #007bff; 
-        color: white; 
-        height: 3em;
-        font-weight: bold;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #0056b3;
-        color: white;
-    }
-    
-    /* Başlık stili */
-    h1 { color: #1e3a8a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    
-    /* Sonuç kutusu stili */
-    .report-box {
-        padding: 20px;
-        background-color: white;
-        border-radius: 15px;
-        border-left: 5px solid #007bff;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-    }
+    .stApp { background-color: #f8fafc; }
+    .auth-card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid #1e3a8a; }
+    .price-box { background: #e0f2fe; padding: 15px; border-radius: 10px; border-left: 5px solid #0284c7; }
     </style>
     """, unsafe_allow_html=True)
 
-# Üst Başlık Alanı
-st.title("🤖 GümrükAsistanı: Akıllı İthalat Analizi")
-st.subheader("Ürün detaylarını girin, gümrük ve lojistik maliyetlerini saniyeler içinde hesaplayalım.")
+# Session State (Oturum Yönetimi)
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None # 'musteri', 'firma' veya None
 
-# Yan Menü (Sidebar)
-with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2854/2854611.png", width=100)
-    st.markdown("### Sistem Notları")
-    st.info("💡 **İpucu:** Ürün adını ne kadar detaylı yazarsanız (örn: 'Lityum iyon pilli robot süpürge') AI o kadar doğru GTİP tahmini yapar.")
-    st.warning("⚠️ Bu hesaplamalar simülasyon amaçlıdır. 2026 güncel mevzuatı temel alınır.")
-    st.divider()
-    st.markdown("🌐 **Lira Markt** iştirakidir.")
+# --- HEADER / NAV ---
+t1, t2 = st.columns([4, 1])
+with t1:
+    st.title("🚢 GümrükAsistanı: Dijital Lojistik Borsası")
+with t2:
+    if st.session_state.user_type:
+        if st.button("Çıkış Yap"):
+            st.session_state.user_type = None
+            st.rerun()
 
-# Ana Ekran Kolonları
-col1, col2 = st.columns([2, 3], gap="large")
-
-with col1:
-    st.markdown("### 📋 Veri Girişi")
-    with st.container(border=True):
-        urun_adi = st.text_input("Ürün Adı", placeholder="Örn: 4K Ultra HD Projeksiyon Cihazı")
-        
-        # Sayısal girişler için yan yana kolonlar
-        c1, c2 = st.columns(2)
-        with c1:
-            fiyat = st.number_input("Birim Alış (USD)", min_value=0.0, step=0.1, format="%.2f")
-            adet = st.number_input("Adet", min_value=1, step=1)
-        with c2:
-            agirlik = st.number_input("Toplam Ağırlık (KG)", min_value=0.0, step=0.1)
-            # Para birimi sabit USD olarak kurgulandı
+# --- ANA SAYFA / HESAPLAMA ---
+if st.session_state.user_type != 'firma':
+    col1, col2 = st.columns([1, 1], gap="large")
     
-    analiz_butonu = st.button("Maliyet Analizini Başlat 🚀")
+    with col1:
+        st.subheader("📦 Maliyet Hesapla")
+        with st.container(border=True):
+            urun = st.text_input("Getirmek istediğiniz ürün?", placeholder="Örn: CNC Lazer Kesim Makinesi")
+            fiyat = st.number_input("Birim Alış Fiyatı (USD)", min_value=0.0)
+            adet = st.number_input("Adet", min_value=1, step=1)
+            agirlik = st.number_input("Toplam KG", min_value=0.0)
+            hesapla = st.button("Analizi Göster 🚀")
 
-with col2:
-    st.markdown("### 📊 Analiz Raporu")
-    if analiz_butonu:
-        if not urun_adi or fiyat == 0:
-            st.error("Lütfen ürün adını ve fiyatını geçerli şekilde girin.")
-        else:
-            with st.spinner("AI Gümrük Mevzuatını (İGV, KDV, ÖTV) ve Navlun Fiyatlarını Hesaplanıyor..."):
-                try:
-                    # Backend API bağlantısı (main.py'ye gider)
-                    res = requests.post("http://localhost:8000/hesapla", 
-                                     json={
-                                         "isim": urun_adi, 
-                                         "fiyat": fiyat, 
-                                         "adet": int(adet), 
-                                         "agirlik": agirlik
-                                     })
+    with col2:
+        st.subheader("📊 Gümrük & Navlun Raporu")
+        if hesapla:
+            with st.spinner("Güncel mevzuat taranıyor..."):
+                res = requests.post("http://localhost:8000/hesapla", json={"isim": urun, "fiyat": fiyat, "adet": adet, "agirlik": agirlik})
+                if res.status_code == 200:
+                    analiz = res.json()["analiz"]
                     
-                    if res.status_code == 200:
-                        st.success("Hesaplama Başarılı!")
-                        # AI'dan gelen markdown içeriğini şık bir kutu içinde gösteriyoruz
-                        st.markdown(f'<div class="report-box">{res.json()["analiz"]}</div>', unsafe_allow_html=True)
+                    if not st.session_state.user_type:
+                        # GİRİŞ YAPILMAMIŞSA BARİYER
+                        st.markdown("<div class='auth-card'>", unsafe_allow_html=True)
+                        st.warning("🔒 Analiz sonuçlarını ve firma tekliflerini görmek için giriş yapmalısınız.")
+                        st.markdown("### Giriş Yap veya Kayıt Ol")
+                        c1, c2 = st.columns(2)
+                        if c1.button("Müşteri Olarak Giriş"):
+                            st.session_state.user_type = 'musteri'
+                            st.rerun()
+                        if c2.button("Lojistik Firması Kaydı"):
+                            st.session_state.user_type = 'firma'
+                            st.rerun()
+                        st.markdown("</div>", unsafe_allow_html=True)
                     else:
-                        st.error(f"API Hatası: {res.status_code}. Lütfen backend'i kontrol edin.")
-                except Exception as e:
-                    st.error(f"Bağlantı Hatası: Sunucuya ulaşılamadı. (Detay: {e})")
-    else:
-        st.info("Analiz sonuçlarını görmek için sol taraftaki formu doldurup butona basın.")
+                        # MÜŞTERİ GİRİŞİ YAPILMIŞSA
+                        st.success("Analiz Tamamlandı!")
+                        st.markdown(f"<div class='price-box'>{analiz}</div>", unsafe_allow_html=True)
+                        st.divider()
+                        st.markdown("### 📢 Teklif İste")
+                        st.write("Bu ürün için gümrük ve lojistik firmalarından teklif toplansın mı?")
+                        if st.button("Teklif Talebi Oluştur (Ücretsiz)"):
+                            st.balloons()
+                            st.info("Talebiniz sistemdeki 50+ firmaya iletildi. Teklifler panelinize düşecek.")
 
-# Alt Bilgi
-st.divider()
-st.caption("© 2026 GümrükAsistanı AI | Tüm maliyetler USD bazlı tahmini rakamlardır.")
+# --- FİRMA PANELİ ---
+if st.session_state.user_type == 'firma':
+    st.header("🏢 Firma Teklif Paneli")
+    st.info("Aşağıdaki talepler için fiyat teklifi verebilirsiniz. Müşteri iletişim bilgileri teklif kabulünden sonra açılır.")
+    
+    # Örnek Talep Listesi (Burayı ileride MySQL'den çekeceğiz)
+    with st.container(border=True):
+        st.write("**Talep #204: 100 Adet Elektrikli Kaykay (Çin - İstanbul)**")
+        st.write("Müşteri: Emre C.")
+        
+        # TEKLİF VERME FORMU
+        with st.expander("Teklif Ver"):
+            t_fiyat = st.number_input("Hizmet Bedeliniz (USD)", min_value=0.0, key="fiyat_204")
+            t_sure = st.number_input("Varış Süresi (Gün)", min_value=1, key="sure_204")
+            t_not = st.text_area("Notunuz", placeholder="Ardiye masrafları hariçtir...", key="not_204")
+            if st.button("Teklifi Gönder"):
+                st.success("Teklifiniz başarıyla iletildi!")
