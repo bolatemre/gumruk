@@ -2,7 +2,7 @@ import streamlit as st
 import mysql.connector
 import requests
 
-# SQL Bağlantı Bilgilerin (Yeni IP eklendi)
+# SQL Bağlantı Bilgilerin
 DB_CONFIG = {
     "host": "72.60.86.17", 
     "user": "u115468925_lojistik",
@@ -18,7 +18,7 @@ def get_db_connection():
         st.error(f"⚠️ Veritabanı bağlantı hatası: {e}")
         return None
 
-# Sayfa Ayarları ve Şık Tasarım
+# Sayfa Ayarları
 st.set_page_config(page_title="GümrükAsistanı AI", page_icon="🚢", layout="wide")
 
 st.markdown("""
@@ -47,15 +47,15 @@ if not st.session_state.user_id:
         with col1:
             st.subheader("📦 Ürün Bilgilerini Girin")
             with st.container(border=True):
-                urun_adi = st.text_input("Ürün Adı", placeholder="Örn: Akıllı Robot Süpürge")
+                urun_adi = st.text_input("Ürün Adı", placeholder="Örn: Akıllı Robot Süpürge", key="input_urun")
                 f_col1, f_col2 = st.columns(2)
                 with f_col1:
-                    fiyat = st.number_input("Birim Fiyat (USD)", min_value=0.0, format="%.2f")
-                    adet = st.number_input("Adet", min_value=1, step=1)
+                    fiyat = st.number_input("Birim Fiyat (USD)", min_value=0.0, format="%.2f", key="input_fiyat")
+                    adet = st.number_input("Adet", min_value=1, step=1, key="input_adet")
                 with f_col2:
-                    agirlik = st.number_input("Toplam Ağırlık (KG)", min_value=0.0)
+                    agirlik = st.number_input("Toplam Ağırlık (KG)", min_value=0.0, key="input_agirlik")
                 
-                analiz_btn = st.button("Maliyeti Hesapla 🚀")
+                analiz_btn = st.button("Maliyeti Hesapla 🚀", key="btn_hesapla")
         
         with col2:
             st.subheader("📝 Analiz Raporu")
@@ -65,11 +65,10 @@ if not st.session_state.user_id:
                 else:
                     with st.spinner("AI Hesaplıyor..."):
                         try:
-                            # Render üzerindeki main.py'ye istek atar
                             res = requests.post("http://localhost:8000/hesapla", 
                                              json={"isim": urun_adi, "fiyat": fiyat, "adet": int(adet), "agirlik": agirlik})
                             if res.status_code == 200:
-                                st.info("🔒 Analizin tamamını görmek ve firma tekliflerini toplamak için giriş yapmalısınız.")
+                                st.info("🔒 Analizin tamamını görmek ve teklif toplamak için giriş yapmalısınız.")
                                 st.markdown(f"<div class='report-card'>{res.json()['analiz'][:300]}... [İÇERİK GİZLENDİ]</div>", unsafe_allow_html=True)
                             else:
                                 st.error("Analiz motoruna ulaşılamadı.")
@@ -78,9 +77,9 @@ if not st.session_state.user_id:
 
     with tab2:
         st.subheader("Sisteme Giriş Yap")
-        login_e = st.text_input("Email Adresiniz")
-        login_p = st.text_input("Şifre", type="password")
-        if st.button("Giriş Yap"):
+        login_e = st.text_input("Email Adresiniz", key="login_email")
+        login_p = st.text_input("Şifre", type="password", key="login_pass")
+        if st.button("Giriş Yap", key="btn_login"):
             conn = get_db_connection()
             if conn:
                 cursor = conn.cursor(dictionary=True)
@@ -96,11 +95,11 @@ if not st.session_state.user_id:
 
     with tab3:
         st.subheader("Yeni Hesap Oluştur")
-        y_isim = st.text_input("Ad Soyad / Firma Ünvanı")
-        y_e = st.text_input("Email")
-        y_p = st.text_input("Şifre", type="password")
-        y_tip = st.selectbox("Üyelik Tipi", ["musteri", "lojistik_firmasi", "gumruk_musaviri"])
-        if st.button("Kayıt Ol"):
+        y_isim = st.text_input("Ad Soyad / Firma Ünvanı", key="reg_isim")
+        y_e = st.text_input("Email", key="reg_email")
+        y_p = st.text_input("Şifre", type="password", key="reg_pass")
+        y_tip = st.selectbox("Üyelik Tipi", ["musteri", "lojistik_firmasi", "gumruk_musaviri"], key="reg_tip")
+        if st.button("Kayıt Ol", key="btn_reg"):
             conn = get_db_connection()
             if conn:
                 cursor = conn.cursor()
@@ -114,17 +113,17 @@ if not st.session_state.user_id:
                 finally:
                     conn.close()
 
-# --- GİRİŞ YAPILMIŞSA ---
+# --- GİRİŞ YAPILMAMIŞSA ---
 else:
     st.sidebar.title("Menü")
     st.sidebar.write(f"Hoş geldiniz, **{st.session_state.user_type.upper()}**")
-    if st.sidebar.button("Güvenli Çıkış"):
+    if st.sidebar.button("Güvenli Çıkış", key="btn_logout"):
         st.session_state.user_id = None
+        st.session_state.user_type = None
         st.rerun()
 
     if st.session_state.user_type == 'musteri':
         st.header("🏢 Müşteri Paneli")
-        # Müşteri burada tam analizi görecek ve teklif isteyecek
         st.write("Hesaplamalarınızı yapın ve gümrük/lojistik firmalarından teklif toplayın.")
     else:
         st.header("🚛 Firma Teklif Paneli")
