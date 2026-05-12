@@ -1,56 +1,50 @@
 import streamlit as st
 import requests
-import time
 
-st.set_page_config(page_title="Lojistik & Gümrük Botu", page_icon="🚢")
+st.set_page_config(page_title="GümrükAsistanı AI", page_icon="📈", layout="wide")
 
-st.title("🚢 Lojistik & Gümrük Danışman Botu")
-st.markdown("Çin'den getirmek istediğiniz ürünlerin maliyetini anında hesaplayın.")
+# Tasarım CSS (Daha profesyonel görünüm)
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 20px; background-color: #007bff; color: white; }
+    </style>
+    """, unsafe_allow_stdio=True)
 
-# Yan menü veya açıklama
+st.title("🤖 GümrükAsistanı: Yapay Zeka Destekli İthalat Analizi")
+st.subheader("Ürün bilgilerini girin, gümrükten kapınıza kadar maliyeti hesaplayalım.")
+
 with st.sidebar:
-    st.header("Nasıl Çalışır?")
-    st.write("Verileri manuel girin, AI gümrük mevzuatına göre size bir maliyet simülasyonu çıkarsın.")
-    st.info("Not: Bu veriler tahmindir, yatırım tavsiyesi değildir.")
+    st.image("https://cdn-icons-png.flaticon.com/512/2854/2854611.png", width=100)
+    st.info("Bu bot, güncel gümrük mevzuatı ve lojistik verilerini kullanarak simülasyon yapar.")
+    st.warning("Resmi işlemler için mutlaka bir gümrük müşavirine danışın.")
 
-# Form yapısı
-with st.form("ithalat_formu"):
-    urun_adi = st.text_input("Ürün Adı (Örn: Bluetooth Kulaklık)")
-    kategori = st.selectbox("Ürün Kategorisi", ["Elektronik", "Tekstil", "Plastik Ürünler", "Mutfak Gereçleri", "Makine Parçaları", "Diğer"])
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        birim_fiyat = st.number_input("Birim Fiyat (USD)", min_value=0.01, format="%.2f")
-    with col2:
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    with st.expander("📦 Ürün Detayları", expanded=True):
+        urun_adi = st.text_input("Ürün Adı", placeholder="Örn: Elektrikli Kaykay")
+        fiyat = st.number_input("Birim Alış Fiyatı (USD)", min_value=0.0)
         adet = st.number_input("Adet", min_value=1, step=1)
-    with col3:
-        agirlik = st.number_input("Toplam KG", min_value=0.1)
+        agirlik = st.number_input("Toplam Ağırlık (KG)", min_value=0.0)
+    
+    analiz_butonu = st.button("Maliyet Analizini Başlat")
 
-    submit = st.form_submit_button("Maliyeti Analiz Et")
-
-if submit:
-    if not urun_adi:
-        st.error("Lütfen ürün adını girin.")
+with col2:
+    if analiz_butonu:
+        if not urun_adi:
+            st.error("Lütfen bir ürün adı girin.")
+        else:
+            with st.spinner("AI Gümrük Mevzuatını ve Navlunları Tarıyor..."):
+                try:
+                    res = requests.post("http://localhost:8000/hesapla", 
+                                     json={"isim": urun_adi, "fiyat": fiyat, "adet": adet, "agirlik": agirlik})
+                    if res.status_code == 200:
+                        st.success("Analiz Hazır!")
+                        st.markdown(res.json()["analiz"])
+                    else:
+                        st.error("Bir hata oluştu, lütfen tekrar deneyin.")
+                except:
+                    st.error("Sunucuya bağlanılamadı.")
     else:
-        with st.spinner("Gümrük verileri ve lojistik maliyetleri hesaplanıyor..."):
-            payload = {
-                "isim": urun_adi,
-                "fiyat": birim_fiyat,
-                "adet": adet,
-                "agirlik": agirlik,
-                "kategori": kategori
-            }
-            
-            try:
-                # Render içinde backend 8000 portunda çalışacak
-                response = requests.post("http://localhost:8000/hesapla", json=payload)
-                
-                if response.status_code == 200:
-                    sonuc = response.json().get("analiz")
-                    st.success("Analiz Başarıyla Tamamlandı!")
-                    st.markdown("### 📊 Maliyet ve Gümrük Raporu")
-                    st.markdown(sonuc)
-                else:
-                    st.error(f"Bir hata oluştu: {response.text}")
-            except Exception as e:
-                st.error(f"Sunucu bağlantı hatası: {e}")
+        st.write("👈 Analiz sonuçları burada görünecek.")
