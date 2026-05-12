@@ -22,13 +22,13 @@ def get_db_connection():
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Lojistik & Gümrük Borsası", page_icon="🚢", layout="wide")
 
-# --- SESSION STATE (Hata Düzeltildi: 'items' ismi 'user_items' yapıldı) ---
+# --- SESSION STATE ---
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
     st.session_state.user_type = None
     st.session_state.user_name = None
     st.session_state.temp_res = None
-    st.session_state.user_items = [] # İsim çakışması engellendi
+    st.session_state.user_items = [] 
 
 # --- GELİŞMİŞ CSS ---
 st.markdown("""
@@ -37,6 +37,7 @@ st.markdown("""
     .item-row { background: #f1f5f9; padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid #cbd5e1; display: flex; justify-content: space-between; }
     .premium-card { background: white; padding: 25px; border-radius: 15px; border-left: 8px solid #1e3a8a; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
     .blur-text { filter: blur(5px); opacity: 0.4; pointer-events: none; }
+    .total-kg-box { background: #1e3a8a; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; margin-top: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -55,7 +56,7 @@ def talebi_kaydet(uid, urunler, yuk_tipi, teslim_sekli, analiz):
 
 # --- 1. DURUM: ZİYARETÇİ EKRANI ---
 if not st.session_state.user_id:
-    tab_ana, tab_auth = st.tabs(["📊 Çoklu Ürün Analizi", "🔑 Giriş / Kayıt"])
+    tab_ana, tab_auth = st.tabs(["📊 Çoklu Ürün Analizi", "🔐 Giriş / Kayıt"])
     
     with tab_ana:
         col1, col2 = st.columns([1, 1], gap="large")
@@ -64,20 +65,34 @@ if not st.session_state.user_id:
             st.subheader("📦 İthalat Kalemlerini Ekleyin")
             with st.container(border=True):
                 u_ad = st.text_input("Ürün İsmi", placeholder="Örn: Akıllı Saat")
-                c1, c2 = st.columns(2)
+                c1, c2, c3 = st.columns(3)
                 u_fiyat = c1.number_input("Birim Fiyat ($)", min_value=0.0)
                 u_adet = c2.number_input("Adet", min_value=1, step=1)
+                u_kilo = c3.number_input("Birim Kilo (KG)", min_value=0.0, format="%.2f")
                 
                 if st.button("➕ Listeye Ekle"):
                     if u_ad and u_fiyat > 0:
-                        st.session_state.user_items.append({"isim": u_ad, "fiyat": u_fiyat, "adet": int(u_adet)})
+                        st.session_state.user_items.append({
+                            "isim": u_ad, 
+                            "fiyat": u_fiyat, 
+                            "adet": int(u_adet),
+                            "kilo": u_kilo
+                        })
                         st.rerun()
                 
-                # Eklenen Ürünlerin Listesi
                 if st.session_state.user_items:
                     st.write("---")
+                    toplam_kg = 0
                     for idx, itm in enumerate(st.session_state.user_items):
-                        st.markdown(f"""<div class='item-row'><span>📦 <b>{itm['isim']}</b> - {itm['adet']} Adet ({itm['fiyat']}$)</span></div>""", unsafe_allow_html=True)
+                        satir_kg = itm['kilo'] * itm['adet']
+                        toplam_kg += satir_kg
+                        st.markdown(f"""
+                        <div class='item-row'>
+                            <span>📦 <b>{itm['isim']}</b> - {itm['adet']} Adet ({itm['fiyat']}$) - Toplam: {satir_kg:.2f} KG</span>
+                        </div>""", unsafe_allow_html=True)
+                    
+                    st.markdown(f"<div class='total-kg-box'>🚛 TOPLAM SEVKİYAT AĞIRLIĞI: {toplam_kg:.2f} KG</div>", unsafe_allow_html=True)
+                    
                     if st.button("🗑 Listeyi Temizle"):
                         st.session_state.user_items = []
                         st.rerun()
@@ -91,10 +106,10 @@ if not st.session_state.user_id:
                     if not st.session_state.user_items:
                         st.error("Lütfen önce en az bir ürün ekleyin.")
                     else:
-                        with st.spinner("Yapay Zeka Mevzuatı İnceliyor..."):
-                            # AI'ya tüm listeyi gönderiyoruz
-                            prompt_text = f"Ürünler: {json.dumps(st.session_state.user_items)} | Yükleme: {y_tip} | Teslim: {t_sekli}"
-                            res = requests.post("http://localhost:8000/hesapla", json={"isim": prompt_text, "fiyat": 0, "adet": 0, "agirlik": 0})
+                        with st.spinner("AI Mevzuatı İnceliyor..."):
+                            t_kg = sum(x['kilo'] * x['adet'] for x in st.session_state.user_items)
+                            prompt_text = f"Ürünler: {json.dumps(st.session_state.user_items)} | Toplam Ağırlık: {t_kg} KG | Yükleme: {y_tip} | Teslim: {t_sekli}"
+                            res = requests.post("http://localhost:8000/hesapla", json={"isim": prompt_text, "fiyat": 0, "adet": 0, "agirlik": t_kg})
                             if res.status_code == 200:
                                 st.session_state.temp_res = res.json()["analiz"]
                                 st.rerun()
@@ -111,32 +126,56 @@ if not st.session_state.user_id:
     with tab_auth:
         col_l, col_r = st.columns(2)
         with col_l:
-            st.markdown("### Giriş")
-            le = st.text_input("E-posta", key="log_email")
-            lp = st.text_input("Şifre", type="password", key="log_pass")
-            if st.button("Giriş Yap"):
-                conn = get_db_connection()
-                if conn:
-                    cursor = conn.cursor(dictionary=True)
-                    cursor.execute("SELECT * FROM users WHERE email=%s AND password=%s", (le, lp))
-                    u = cursor.fetchone()
-                    if u:
-                        st.session_state.user_id = u['id']
-                        st.session_state.user_type = u['user_type']
-                        st.session_state.user_name = u['username']
-                        # EĞER HESAPLAMA VARSA OTOMATİK KAYDET
-                        if st.session_state.user_items and st.session_state.temp_res:
-                            talebi_kaydet(u['id'], st.session_state.user_items, y_tip, t_sekli, st.session_state.temp_res)
-                        st.rerun()
+            st.markdown("### 🔑 Giriş Yap")
+            with st.container(border=True):
+                le = st.text_input("E-posta", key="log_email")
+                lp = st.text_input("Şifre", type="password", key="log_pass")
+                if st.button("Giriş Yap 🚀"):
+                    conn = get_db_connection()
+                    if conn:
+                        cursor = conn.cursor(dictionary=True)
+                        cursor.execute("SELECT * FROM users WHERE email=%s AND password=%s", (le, lp))
+                        u = cursor.fetchone()
+                        if u:
+                            st.session_state.user_id = u['id']
+                            st.session_state.user_type = u['user_type']
+                            st.session_state.user_name = u['username']
+                            if st.session_state.user_items and st.session_state.temp_res:
+                                talebi_kaydet(u['id'], st.session_state.user_items, y_tip, t_sekli, st.session_state.temp_res)
+                            st.rerun()
+                        else:
+                            st.error("Hatalı e-posta veya şifre.")
+
         with col_r:
-            st.markdown("### Kayıt")
-            # ... (Kayıt kodları buraya gelecek)
+            st.markdown("### 📝 Yeni Kayıt Ol")
+            with st.container(border=True):
+                r_type = st.radio("Üyelik Tipiniz", ["musteri", "lojistik_firmasi", "gumruk_musaviri"], horizontal=True)
+                r_name = st.text_input("İlgili Kişi / Firma Adı")
+                r_mail = st.text_input("E-posta Adresi", key="reg_email")
+                r_tel = st.text_input("Telefon Numarası")
+                r_pass = st.text_input("Şifre Belirleyin", type="password", key="reg_pass")
+                
+                if st.button("Kaydı Tamamla ✨"):
+                    if r_name and r_mail and r_pass:
+                        conn = get_db_connection()
+                        if conn:
+                            try:
+                                cursor = conn.cursor()
+                                cursor.execute("INSERT INTO users (username, email, password, user_type, phone) VALUES (%s,%s,%s,%s,%s)", 
+                                             (r_name, r_mail, r_pass, r_type, r_tel))
+                                conn.commit()
+                                st.success("Kayıt Başarılı! Şimdi giriş yapabilirsiniz.")
+                            except Exception as e:
+                                st.error(f"Hata: Bu e-posta zaten kayıtlı olabilir.")
+                            finally:
+                                conn.close()
+                    else:
+                        st.warning("Lütfen zorunlu alanları doldurun.")
 
 else:
-    # --- GİRİŞ YAPILMIŞ PANELLER ---
     st.sidebar.success(f"Hoş geldin, {st.session_state.user_name}")
-    if st.sidebar.button("Güvenli Çıkış"):
+    if st.sidebar.button("🚪 Güvenli Çıkış"):
         st.session_state.clear()
         st.rerun()
     
-    # Müşteri ve Firma panelleri burada devam edecek...
+    # Burada kullanıcı tipine göre (Müşteri/Firma) paneller devam eder.
