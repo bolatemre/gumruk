@@ -7,34 +7,31 @@ import uvicorn
 app = FastAPI()
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-class UrunGiris(BaseModel):
+class AnalizIstegi(BaseModel):
     isim: str
     fiyat: float
     adet: int
     agirlik: float
 
 @app.post("/hesapla")
-async def analiz_et(urun: UrunGiris):
-    # AI burada hem kategoriyi tahmin edecek hem gümrüğü hesaplayacak
+async def analiz_et(istek: AnalizIstegi):
+    # 2026 GÜNCEL MEVZUAT TALİMATI
     prompt = f"""
-    Müşteri şu ürünü getirmek istiyor: "{urun.isim}"
-    Birim Fiyat: {urun.fiyat} USD, Adet: {urun.adet}, Toplam Ağırlık: {urun.agirlik} KG.
-
-    Senden şunları bekliyorum:
-    1. Ürünün hangi ana kategoriye (Elektronik, Tekstil, Oyuncak, Makine vb.) girdiğini belirle.
-    2. Olası GTİP kodunu yaz.
-    3. Gümrük Vergisi, KDV, ÖTV (varsa), Gümrük Müşavirlik ve Ardiye masraflarını içeren detaylı bir tablo oluştur.
-    4. Navlun (Nakliye) maliyetini tahmin et.
-    5. TOPLAM MALİYETİ ve ÜRÜN BAŞI MALİYETİ hesapla.
-    6. 'Karlılık Analizi': Bu ürün Türkiye pazarında satılır mı? Esnaf tavsiyesi ver.
+    TÜRKİYE 2026 GÜMRÜK VE DIŞ TİCARET REJİMİNE GÖRE HESAPLA:
+    Ürün: {istek.isim} | Alış Fiyatı: {istek.fiyat} USD | Adet: {istek.adet} | Ağırlık: {istek.agirlik} KG
     
-    Yanıtı çok şık bir markdown formatında, tablolar kullanarak ver.
+    ZORUNLU HESAPLAMA PARAMETRELERİ:
+    1. Gümrük Vergisi: Çin menşei için %60 İGV (İlave Gümrük Vergisi) ekle.
+    2. KDV: %20 olarak hesapla.
+    3. Ek Masraflar: Damga vergisi, Gümrüğe sunma ve Ardiye masrafları için toplam maktu 120 USD ekle.
+    4. Navlun (USD): KG başı 6 USD üzerinden tahmini kargo bedeli çıkar.
+    5. ÇIKTI: Sadece USD ($) cinsinden, net bir tablo ve kısa esnaf yorumu olsun.
     """
 
     try:
         completion = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "Sen dünyanın en iyi lojistik ve gümrük danışmanısın. Kullanıcıya para kazandıracak bilgiler verirsin."},
+                {"role": "system", "content": "Sen çok tecrübeli bir gümrük müşavirisin. 2026 yılı güncel vergi oranlarını ve dolar bazlı maliyetleri kullanırsın."},
                 {"role": "user", "content": prompt}
             ],
             model="llama-3.1-8b-instant",
@@ -42,3 +39,6 @@ async def analiz_et(urun: UrunGiris):
         return {"analiz": completion.choices[0].message.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
