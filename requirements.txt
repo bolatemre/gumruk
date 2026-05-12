@@ -4,3 +4,4 @@ groq
 streamlit
 requests
 python-multipart
+mysql-connector-python
